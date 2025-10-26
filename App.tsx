@@ -15,22 +15,30 @@ LocaleConfig.locales['ko'] = {
 LocaleConfig.defaultLocale = 'ko';
 
 export default function App() {
+  // const markedDates = {
+  //   '2025-03-08': { marked: true, dotColor: '#2196f3', activeOpacity: 0 },
+  //   '2025-03-15': { marked: true, dotColor: '#4caf50' },
+  //   '2025-03-22': { marked: true, dotColor: '#ff5722' },
+  //   '2025-03-30': {
+  //     selected: true,
+  //     marked: true,
+  //     selectedColor: '#f48fb1',
+  //     dotColor: '#f44336'
+  //   },
+  // };
+
   const markedDates = {
-    '2025-03-08': { marked: true, dotColor: '#2196f3', activeOpacity: 0 },
-    '2025-03-15': { marked: true, dotColor: '#4caf50' },
-    '2025-03-22': { marked: true, dotColor: '#ff5722' },
-    '2025-03-30': {
-      selected: true,
-      marked: true,
-      selectedColor: '#f48fb1',
-      dotColor: '#f44336'
-    },
-  };
+    '2025-10-27': { startingDay: true, color: '#50cebb', textColor: 'white' },
+    '2025-10-28': { color: '#70d7c7', textColor: 'white' },
+    '2025-10-29': { color: '#70d7c7', textColor: 'white' },
+    '2025-10-30': { endingDay: true, color: '#50cebb', textColor: 'white' },
+  }
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>📘 IT 자격증 일정 안내</Text>
       <Calendar
+        markingType="period"
         markedDates={markedDates}
         onDayPress={(day) => Alert.alert(`${day.dateString} 일정 안내`, '해당 날짜의 시험 접수 또는 발표일 정보를 표시합니다.')}
         theme={{
