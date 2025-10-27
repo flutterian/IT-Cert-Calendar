@@ -28,17 +28,36 @@ export default function App() {
   // };
 
   const markedDates = {
-    '2025-10-27': { startingDay: true, color: '#50cebb', textColor: 'white' },
-    '2025-10-28': { color: '#70d7c7', textColor: 'white' },
-    '2025-10-29': { color: '#70d7c7', textColor: 'white' },
-    '2025-10-30': { endingDay: true, color: '#50cebb', textColor: 'white' },
+    '2025-10-27': {
+      periods: [
+        { startingDay: true, endingDay: false, color: '#50cebb' }, // A 시작
+      ]
+    },
+    '2025-10-28': {
+      periods: [
+        { startingDay: false, endingDay: false, color: '#50cebb' }, // A 중간
+        { startingDay: true, endingDay: false, color: '#f08080' },  // B 시작
+      ]
+    },
+    '2025-10-29': {
+      periods: [
+        { startingDay: false, endingDay: true, color: '#50cebb' },  // A 끝
+        { startingDay: false, endingDay: false, color: '#f08080' }, // B 중간
+      ]
+    },
+    '2025-10-30': {
+      periods: [
+        { color: 'transparent' },  // A 끝
+        { startingDay: false, endingDay: true, color: '#f08080' },  // B 끝
+      ]
+    }
   }
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>📘 IT 자격증 일정 안내</Text>
       <Calendar
-        markingType="period"
+        markingType="multi-period"
         markedDates={markedDates}
         onDayPress={(day) => Alert.alert(`${day.dateString} 일정 안내`, '해당 날짜의 시험 접수 또는 발표일 정보를 표시합니다.')}
         theme={{
