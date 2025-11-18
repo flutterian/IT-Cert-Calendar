@@ -1,6 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Linking } from 'react-native';
 import { Calendar, LocaleConfig, AgendaList } from 'react-native-calendars';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { firestoreDb } from './firebaseConfig';
 
 // 한국어 설정
 LocaleConfig.locales['ko'] = {
@@ -19,6 +21,7 @@ type ExamPeriod = {
   color: string;
   startingDay?: boolean;
   endingDay?: boolean;
+  applyUrl?: string;
 };
 
 type ExamMarkedDates = Record<string, { periods: ExamPeriod[] }>;
@@ -30,41 +33,78 @@ type AgendaItem = {
   status: string;
   height: number;
   day: string;
+  applyUrl?: string;
 };
 
 type AgendaRow = AgendaItem | { id: string; isEmpty: true };
 
-const MARKED_DATES: ExamMarkedDates = {
-  '2025-10-27': {
-    periods: [
-      { title: 'SQLD', startingDay: true, endingDay: false, color: '#50cebb' }, // A 시작
-    ],
-  },
-  '2025-10-28': {
-    periods: [
-      { title: 'SQLD', startingDay: false, endingDay: false, color: '#50cebb' }, // A 중간
-      { title: 'DAsP', startingDay: true, endingDay: false, color: '#f08080' }, // B 시작
-    ],
-  },
-  '2025-10-29': {
-    periods: [
-      { title: 'SQLD', startingDay: false, endingDay: true, color: '#50cebb' }, // A 끝
-      { title: 'DAsP', startingDay: false, endingDay: false, color: '#f08080' }, // B 중간
-    ],
-  },
-  '2025-10-30': {
-    periods: [
-      { title: 'DAsP', startingDay: false, endingDay: true, color: '#f08080' }, // B 끝
-    ],
-  },
-  '2025-10-31': {
-    periods: [
-      { title: '정보처리산업기사', startingDay: true, endingDay: true, color: 'orange' }, // C 일정
-    ],
-  },
+type FirestoreExamSchedule = {
+  id: string;
+  title?: string;
+  name?: string;
+  color?: string;
+  startDate?: string;
+  endDate?: string;
+  applyUrl?: string;
 };
 
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
 const weekdayNames = ['일', '월', '화', '수', '목', '금', '토'];
+
+const createUTCDate = (value: string | undefined) => {
+  if (!value) {
+    return null;
+  }
+  const [year, month, day] = value.split('-').map((part) => Number(part));
+  if ([year, month, day].some((part) => Number.isNaN(part))) {
+    return null;
+  }
+  return new Date(Date.UTC(year, month - 1, day));
+};
+
+const formatDateKey = (date: Date) => {
+  return date.toISOString().split('T')[0] ?? '';
+};
+
+const mergeScheduleIntoMarkedDates = (acc: ExamMarkedDates, schedule: FirestoreExamSchedule) => {
+  const startDate = createUTCDate(schedule.startDate);
+  const endDate = schedule.endDate ? createUTCDate(schedule.endDate) : startDate;
+
+  if (!startDate || !endDate) {
+    return acc;
+  }
+
+  const totalDays = Math.floor((endDate.getTime() - startDate.getTime()) / DAY_IN_MS) + 1;
+  const label = schedule.title?.trim() || schedule.name?.trim() || '무제';
+  const color = schedule.color?.trim() || '#2563eb';
+
+  for (let dayIndex = 0; dayIndex < totalDays; dayIndex += 1) {
+    const currentDate = new Date(startDate.getTime() + dayIndex * DAY_IN_MS);
+    const dateKey = formatDateKey(currentDate);
+    if (!dateKey) {
+      continue;
+    }
+
+    const newPeriod: ExamPeriod = {
+      title: label,
+      color,
+      startingDay: dayIndex === 0,
+      endingDay: dayIndex === totalDays - 1,
+      applyUrl: schedule.applyUrl,
+    };
+
+    acc[dateKey] = {
+      periods: [...(acc[dateKey]?.periods ?? []), newPeriod],
+    };
+  }
+
+  return acc;
+};
+
+const buildMarkedDatesFromSchedules = (schedules: FirestoreExamSchedule[]) => {
+  return schedules.reduce<ExamMarkedDates>((acc, schedule) => mergeScheduleIntoMarkedDates(acc, schedule), {});
+};
 
 const formatDisplayDate = (dateString: string) => {
   if (!dateString) {
@@ -99,11 +139,47 @@ const isAgendaItem = (item: AgendaRow): item is AgendaItem => {
 };
 
 export default function App() {
-  const dateKeys = React.useMemo(() => Object.keys(MARKED_DATES), []);
-  const [selectedDate, setSelectedDate] = React.useState<string>(dateKeys[0] ?? '');
+  const [markedDates, setMarkedDates] = React.useState<ExamMarkedDates>({});
+  const [selectedDate, setSelectedDate] = React.useState<string>('');
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [fetchError, setFetchError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const unsubscribe = onSnapshot(
+      collection(firestoreDb, 'exams'),
+      (snapshot) => {
+
+        console.log("PROJECT:", firestoreDb.app.options.projectId);
+        const schedules = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as FirestoreExamSchedule));
+        const validSchedules = schedules.filter((schedule) => Boolean(schedule.startDate));
+        console.log({ snapshot, schedules, validSchedules });
+
+        setMarkedDates(buildMarkedDatesFromSchedules(validSchedules));
+        setIsLoading(false);
+        setFetchError(null);
+      },
+      (error) => {
+        console.error('Failed to load exam schedules', error);
+        setFetchError('일정을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');
+        setIsLoading(false);
+      },
+    );
+
+    return unsubscribe;
+  }, []);
+
+  React.useEffect(() => {
+    if (selectedDate) {
+      return;
+    }
+    const firstDate = Object.keys(markedDates).sort()[0];
+    if (firstDate) {
+      setSelectedDate(firstDate);
+    }
+  }, [markedDates, selectedDate]);
 
   const calendarMarkedDates = React.useMemo(() => {
-    const base = Object.entries(MARKED_DATES).reduce<Record<string, any>>((acc, [dateKey, value]) => {
+    const base = Object.entries(markedDates).reduce<Record<string, any>>((acc, [dateKey, value]) => {
       acc[dateKey] = { ...value };
       return acc;
     }, {});
@@ -123,7 +199,7 @@ export default function App() {
       return [] as AgendaItem[];
     }
 
-    const periods = MARKED_DATES[selectedDate]?.periods ?? [];
+    const periods = markedDates[selectedDate]?.periods ?? [];
     return periods
       .filter((period) => period.title && period.title.trim().length > 0)
       .map((period, index) => ({
@@ -133,8 +209,9 @@ export default function App() {
         status: getPeriodStatus(period),
         height: 80,
         day: selectedDate,
+        applyUrl: period.applyUrl,
       }));
-  }, [selectedDate]);
+  }, [selectedDate, markedDates]);
 
   const agendaSections = React.useMemo(
     () =>
@@ -151,7 +228,15 @@ export default function App() {
     [selectedDate, selectedSubjects],
   );
 
-  const handleApplyPress = React.useCallback((subjectName: string) => {
+  const handleApplyPress = React.useCallback(async (subjectName: string, applyUrl?: string) => {
+    if (applyUrl) {
+      const supported = await Linking.canOpenURL(applyUrl);
+      if (supported) {
+        Linking.openURL(applyUrl);
+        return;
+      }
+    }
+
     Alert.alert('신청 안내', `${subjectName} 접수 페이지로 이동합니다.`, [{ text: '확인' }]);
   }, []);
 
@@ -174,7 +259,7 @@ export default function App() {
           </View>
           <TouchableOpacity
             style={styles.applyButton}
-            onPress={() => handleApplyPress(item.name)}
+            onPress={() => handleApplyPress(item.name, item.applyUrl)}
             activeOpacity={0.8}
           >
             <Text style={styles.applyButtonText}>신청하기</Text>
@@ -194,7 +279,6 @@ export default function App() {
           markedDates={calendarMarkedDates}
           onDayPress={(day) => setSelectedDate(day.dateString)}
           dayComponent={({ date, marking, state }) => {
-            console.log({ state })
             if (!date) {
               return null;
             }
@@ -239,7 +323,16 @@ export default function App() {
           }}
         />
       </View>
-      {selectedDate ? (
+      {isLoading ? (
+        <View style={styles.loadingWrapper}>
+          <ActivityIndicator size="small" color="#2563eb" />
+          <Text style={styles.loadingText}>일정을 불러오는 중입니다...</Text>
+        </View>
+      ) : fetchError ? (
+        <View style={styles.agendaHeader}>
+          <Text style={styles.errorText}>{fetchError}</Text>
+        </View>
+      ) : selectedDate ? (
         <>
           <View style={styles.agendaHeader}>
             <Text style={styles.agendaHeaderDate}>{formatDisplayDate(selectedDate)}</Text>
@@ -318,4 +411,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   emptyAgendaText: { fontSize: 14, color: '#6b7280' },
+  loadingWrapper: { marginTop: 32, alignItems: 'center', justifyContent: 'center' },
+  loadingText: { marginTop: 8, fontSize: 13, color: '#6b7280' },
+  errorText: { fontSize: 14, color: '#dc2626' },
 });
