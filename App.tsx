@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Linking } from 'react-native';
-import { Calendar, LocaleConfig, AgendaList } from 'react-native-calendars';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Linking, ScrollView } from 'react-native';
+import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { firestoreDb } from './firebaseConfig';
 
@@ -35,8 +35,6 @@ type AgendaItem = {
   day: string;
   applyUrl?: string;
 };
-
-type AgendaRow = AgendaItem | { id: string; isEmpty: true };
 
 type FirestoreExamSchedule = {
   id: string;
@@ -134,10 +132,6 @@ const getPeriodStatus = (period: ExamPeriod) => {
   return '진행 중';
 };
 
-const isAgendaItem = (item: AgendaRow): item is AgendaItem => {
-  return (item as AgendaItem).name !== undefined;
-};
-
 export default function App() {
   const [markedDates, setMarkedDates] = React.useState<ExamMarkedDates>({});
   const [selectedDate, setSelectedDate] = React.useState<string>('');
@@ -213,21 +207,6 @@ export default function App() {
       }));
   }, [selectedDate, markedDates]);
 
-  const agendaSections = React.useMemo(
-    () =>
-      selectedDate
-        ? [
-          {
-            title: formatDisplayDate(selectedDate),
-            data: selectedSubjects.length
-              ? (selectedSubjects as AgendaRow[])
-              : ([{ id: `${selectedDate}-empty`, isEmpty: true }] as AgendaRow[]),
-          },
-        ]
-        : [],
-    [selectedDate, selectedSubjects],
-  );
-
   const handleApplyPress = React.useCallback(async (subjectName: string, applyUrl?: string) => {
     if (applyUrl) {
       const supported = await Linking.canOpenURL(applyUrl);
@@ -241,17 +220,9 @@ export default function App() {
   }, []);
 
   const renderAgendaItem = React.useCallback(
-    (item: AgendaRow) => {
-      if (!isAgendaItem(item)) {
-        return (
-          <View style={styles.emptyAgenda}>
-            <Text style={styles.emptyAgendaText}>등록된 일정이 없습니다.</Text>
-          </View>
-        );
-      }
-
+    (item: AgendaItem) => {
       return (
-        <View style={styles.agendaItem}>
+        <View key={item.id} style={styles.agendaItem}>
           <View style={[styles.agendaColor, { backgroundColor: item.color }]} />
           <View style={styles.agendaDetails}>
             <Text style={styles.agendaTitle}>{item.name}</Text>
@@ -271,14 +242,14 @@ export default function App() {
   );
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
       <Text style={styles.title}>📘 IT 자격증 일정 안내</Text>
       <View style={styles.calendarWrapper}>
         <Calendar
           markingType="multi-dot"
           markedDates={calendarMarkedDates}
           onDayPress={(day) => setSelectedDate(day.dateString)}
-          dayComponent={({ date, marking, state }) => {
+          dayComponent={({ date, marking }) => {
             if (!date) {
               return null;
             }
@@ -337,26 +308,28 @@ export default function App() {
           <View style={styles.agendaHeader}>
             <Text style={styles.agendaHeaderDate}>{formatDisplayDate(selectedDate)}</Text>
           </View>
-          <AgendaList
-            sections={agendaSections}
-            renderItem={(item) => renderAgendaItem(item.item as AgendaRow)}
-            keyExtractor={(item) => (item as AgendaRow).id}
-            sectionStyle={styles.sectionHeader}
-            contentContainerStyle={styles.agendaContent}
-            dayFormatter={(dateString) => formatDisplayDate(dateString)}
-          />
+          <View style={styles.agendaContent}>
+            {selectedSubjects.length ? (
+              selectedSubjects.map((item) => renderAgendaItem(item))
+            ) : (
+              <View style={styles.emptyAgenda}>
+                <Text style={styles.emptyAgendaText}>등록된 일정이 없습니다.</Text>
+              </View>
+            )}
+          </View>
         </>
       ) : (
         <View style={styles.agendaHeader}>
           <Text style={styles.emptyAgendaText}>표시할 일정이 없습니다.</Text>
         </View>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 60, backgroundColor: '#fff' },
+  container: { flex: 1, backgroundColor: '#fff' },
+  scrollContent: { paddingTop: 60, paddingBottom: 40 },
   title: { fontSize: 20, textAlign: 'center', marginBottom: 16, fontWeight: 'bold' },
   calendarWrapper: { paddingHorizontal: 16 },
   dayContainer: {
@@ -382,7 +355,6 @@ const styles = StyleSheet.create({
   agendaHeader: { marginTop: 24, marginBottom: 8, paddingHorizontal: 20 },
   agendaHeaderDate: { fontSize: 16, fontWeight: '600', color: '#111827' },
   agendaContent: { paddingHorizontal: 20, paddingBottom: 32 },
-  sectionHeader: { backgroundColor: '#fff', paddingHorizontal: 20, paddingVertical: 8 },
   agendaItem: {
     flexDirection: 'row',
     alignItems: 'center',
