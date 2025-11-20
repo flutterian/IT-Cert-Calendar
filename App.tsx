@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Linking, ScrollView } from 'react-native';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { firestoreDb } from './firebaseConfig';
+import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
 
 // 한국어 설정
 LocaleConfig.locales['ko'] = {
@@ -138,7 +140,25 @@ export default function App() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [fetchError, setFetchError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
+    registerForPushNotifications();
+  }, []);
+
+  async function registerForPushNotifications() {
+    if (!Device.isDevice) return;
+
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') {
+      alert('푸시 권한이 필요합니다.');
+      return;
+    }
+
+    const token = (await Notifications.getExpoPushTokenAsync()).data;
+    console.log("🚀 Expo Push Token:", token);
+    alert("토큰 발급됨!\n" + token);
+  }
+
+  useEffect(() => {
     const unsubscribe = onSnapshot(
       collection(firestoreDb, 'exams'),
       (snapshot) => {
@@ -162,7 +182,7 @@ export default function App() {
     return unsubscribe;
   }, []);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (selectedDate) {
       return;
     }
