@@ -145,16 +145,18 @@ export default function App() {
   }, []);
 
   async function registerForPushNotifications() {
+    console.log('@@', { Device, bool: Device.isDevice});
     if (!Device.isDevice) return;
 
     const { status } = await Notifications.requestPermissionsAsync();
+    console.log('@@@', { status });
     if (status !== 'granted') {
       alert('푸시 권한이 필요합니다.');
       return;
     }
 
     const token = (await Notifications.getExpoPushTokenAsync()).data;
-    console.log("🚀 Expo Push Token:", token);
+    console.log("Expo Push Token:", { token });
     alert("토큰 발급됨!\n" + token);
   }
 
