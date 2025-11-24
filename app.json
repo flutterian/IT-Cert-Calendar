@@ -13,7 +13,8 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.bm-choi.ITcertcalendar"
     },
     "android": {
       "googleServicesFile": "./android/app/google-services.json",
