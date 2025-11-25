@@ -134,6 +134,18 @@ const getPeriodStatus = (period: ExamPeriod) => {
   return '진행 중';
 };
 
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+
+    // Expo SDK 51+ 추가 필드
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
 export default function App() {
   const [markedDates, setMarkedDates] = React.useState<ExamMarkedDates>({});
   const [selectedDate, setSelectedDate] = React.useState<string>('');
