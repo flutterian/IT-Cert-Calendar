@@ -136,7 +136,6 @@ const getPeriodStatus = (period: ExamPeriod) => {
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
 
@@ -151,6 +150,20 @@ export default function App() {
   const [selectedDate, setSelectedDate] = React.useState<string>('');
   const [isLoading, setIsLoading] = React.useState(true);
   const [fetchError, setFetchError] = React.useState<string | null>(null);
+
+  Notifications.addNotificationReceivedListener(notification => {
+    console.log("🔵 알림 도착(수신)", notification.request.content.data);
+  });
+
+  Notifications.addNotificationResponseReceivedListener(response => {
+    const data = response.notification.request.content.data;
+    console.log("🟢 알림 클릭함!", data);
+
+    // 예: 날짜 이동
+    if (data.action === "openExam") {
+      setSelectedDate(data.jumpDate as string);
+    }
+  });
 
   useEffect(() => {
     registerForPushNotifications();
