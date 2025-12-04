@@ -17,6 +17,7 @@
       "bundleIdentifier": "com.bm-choi.ITcertcalendar"
     },
     "android": {
+      // "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
